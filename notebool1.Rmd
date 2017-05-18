@@ -1,0 +1,111 @@
+---
+title: "Sentiment Analysis In Arabic."
+output: html_notebook
+---
+
+1. load the the required packages for the work.
+
+```{r }
+library(dplyr)
+library(xlsx)
+library(tm)
+library(NLP)
+library(caret)
+source("utils.R",local = TRUE)
+source("RArabicStemmer.R", local = TRUE)
+Sys.setlocale("LC_ALL", "Arabic")
+set.seed(32323)
+```
+
+1. load the corpus and do some insights.
+
+```{r}
+unclean.corpus <- read.csv("data/corpus_train.csv",encoding = "UTF-8")
+#arabic.lexicon <- read.xlsx("data/sentimentLex.xlsx",sheetIndex = 1,encoding = "UTF-8")
+arabic.stopword.df <- read.table("data/arabicStops.txt", encoding = "UTF-8")
+arabic.stopword <- as.character((arabic.stopword.df$V1))
+```
+
+```{r}
+#str(unclean.corpus)
+table(unclean.corpus$class)
+```
+
+3. create the twitter corpus and apply cleaning steps 
+
+```{r}
+
+
+twitter.corpus <- Corpus(VectorSource(unclean.corpus$tweet))
+twitter.corpus.clean <- tm_map(twitter.corpus, tolower)
+twitter.corpus.clean <- tm_map(twitter.corpus.clean, removeNumbers)
+twitter.corpus.clean <- tm_map(twitter.corpus.clean, removeWords,arabic.stopword)
+twitter.corpus.clean <- tm_map(twitter.corpus.clean, removePunctuation)
+twitter.corpus.clean <- tm_map(twitter.corpus.clean, removeEnglishWords)
+twitter.corpus.clean <- tm_map(twitter.corpus.clean, stripWhitespace)
+twitter.corpus.clean <- tm_map(twitter.corpus.clean, reomveElongation)
+twitter.corpus.clean <- tm_map(twitter.corpus.clean, reomveSingleLetters)
+twitter.corpus.clean <- tm_map(twitter.corpus.clean, removeDiacritics)
+twitter.corpus.clean <- tm_map(twitter.corpus.clean, stemArabic)
+# dataframe <- data.frame(text=sapply(twitter.corpus.clean,as.character),stringsAsFactors=F)
+# write.table(dataframe$text, sep="\n", file = "in.txt", fileEncoding = "UTF-8", col.names = F , row.names = F)
+# stemFile("in.txt", "out.txt")
+
+```
+
+4. building frequency matrix 
+```{r}
+dataframe <- read.table("out.txt", sep="\n", fileEncoding = "UTF-8")
+#write.xlsx(dataframe, "clean/twitter_clean_with_normalize.xlsx",sheetName = "sheet")
+twitter.dtm <- DocumentTermMatrix(Corpus(DataframeSource(dataframe)))
+inspect(twitter.dtm)
+```
+
+5. Build the model and evaluate it 
+```{r}
+
+twitter.dict <- findFreqTerms(twitter.dtm, 5)
+#print(twitter.dict)
+twitter.df <- DocumentTermMatrix(Corpus(DataframeSource(dataframe)),
+                                list(dictionary = twitter.dict))
+inspect(twitter.df)
+twitter.df <- apply(twitter.df, MARGIN = 2, convertCounts)
+twitter.df <- as.data.frame(twitter.df)
+twitter.df <- twitter.df[-1420,]
+twitter.df$Class <- as.character(unclean.corpus$class)
+twitter.df$Class <- factor(twitter.df$Class)
+class(twitter.df)
+dim(twitter.df)
+
+```
+
+
+```{r}
+
+cols <- ncol(twitter.df)
+inTrain <- createDataPartition(y= twitter.df$Class ,p =.80 , list = F)
+twitter.training <- twitter.df[inTrain,]
+twitter.testing <- twitter.df[-inTrain,]
+
+table(twitter.training$Class)
+table(twitter.testing$Class)
+
+library(e1071)
+twitter_classifier <- naiveBayes(twitter.training[,-cols], twitter.training[,cols])
+
+twitter.predicted <- predict(twitter_classifier, twitter.testing[,-cols])
+
+library(gmodels)
+CrossTable(twitter.predicted, twitter.testing$Class,
+           prop.chisq = FALSE, prop.t = FALSE, prop.r = FALSE,
+           dnn = c('predicted', 'actual'))
+
+```
+
+
+```{r}
+train_control <- trainControl(method="cv", number=10)
+model <- train(Class~., data=twitter.df, trControl=train_control, 
+               method="glm.nb",tuneLength = 2)
+print(model)
+```

@@ -1,0 +1,67 @@
+---
+title: "Feature Extraction Notebook."
+output: html_notebook
+---
+Step.1 Loading some libs and sources files for work.
+```{r}
+library(dplyr)
+library(xlsx)
+
+```
+
+```{r}
+source("utils.R",local = TRUE)
+```
+Step.5 Features Engineering 
+```{r}
+clean.corpus <- unclean.corpus
+clean.corpus$tweet <- clean.tweets
+clean.corpus <-countLinks(clean.corpus)
+clean.corpus <- countPosWords(clean.corpus)
+clean.corpus <- countNegWords(clean.corpus)
+clean.corpus <- tweet.length(clean.corpus)
+
+twitter.dtm <- DocumentTermMatrix(Corpus(VectorSource(clean.corpus$tweet)))
+inspect(twitter.dtm)
+twitter.dict <- findFreqTerms(twitter.dtm, 1)
+twitter.df <- DocumentTermMatrix(Corpus(DataframeSource(clean.corpus)),
+                                list(dictionary = twitter.dict))
+inspect(twitter.df)
+#twitter.df <- apply(twitter.df, MARGIN = 2, function(row){t(row)})
+twitter.df <- apply(twitter.df, MARGIN = 2, convertCounts)
+twitter.df <- as.data.frame(twitter.df)
+twitter.df$numLinks <- factor(as.character(clean.corpus$numLinks))
+twitter.df$numPosWords <- factor(as.character(clean.corpus$numPosWords))
+twitter.df$numNegWords <- factor(as.character(clean.corpus$numNegWords))
+twitter.df$length <- factor(as.character(clean.corpus$length))
+twitter.df$class <- factor(as.character(clean.corpus$class))
+
+
+```
+
+```{r}
+
+cols <- ncol(twitter.df)
+inTrain <- createDataPartition(y= twitter.df$class ,p =.80 , list = F)
+twitter.training <- twitter.df[inTrain,]
+twitter.testing <- twitter.df[-inTrain,]
+
+table(twitter.training$class)
+table(twitter.testing$class)
+
+library(e1071)
+
+twitter_classifier <- naiveBayes(twitter.training[,-cols], twitter.training[,cols])
+twitter.predicted <- predict(twitter_classifier, twitter.testing[,-cols])
+#twitter_classifier <- svm(class~., data = twitter.training)
+#twitter.predicted <- predict(twitter_classifier, twitter.testing)
+library(gmodels)
+CrossTable(twitter.predicted, twitter.testing$class,
+           prop.chisq = FALSE, prop.t = FALSE, prop.r = FALSE,
+           dnn = c('predicted', 'actual'))
+
+retrieved <- length(twitter.predicted)
+true.preds <- length(which((twitter.predicted == twitter.testing$class)  == T))
+accuracy <- (true.preds / retrieved) * 100
+accuracy
+```

@@ -1,0 +1,54 @@
+---
+title: "Pre-Processing Notebook."
+output: html_notebook
+---
+Step.1 Loading some libs and sources files for work.
+```{r}
+
+library(dplyr)
+library(xlsx)
+library(tm)
+library(stringr)
+library(arabicStemR)
+Sys.setlocale("LC_ALL", "Arabic")
+set.seed(32323)
+
+```
+
+Step.2 Source Helper Functions
+```{r}
+source("utils.R",local = TRUE)
+```
+
+Step.3 Reading the datasets
+```{r}
+unclean.corpus <- read.table("data/corpus_train.csv",encoding = "UTF-8",
+                             sep = ",",header = T, stringsAsFactors = F)
+arabic.stopword.df <- read.table("data/arabicStops.txt", encoding = "UTF-8")
+arabic.stopword <- as.character((arabic.stopword.df$V1))
+#unclean.corpus <- unclean.corpus[1:2000,]
+unclean.tweets <-  as.vector(unclean.corpus$tweet)
+```
+
+Step.4 Cleaning and Preprocessing
+```{r}
+clean.tweets <- as.vector(sapply(unclean.tweets, removeMention))
+clean.tweets <- as.vector(sapply(clean.tweets, removeHashtag))
+clean.tweets <- as.vector(sapply(clean.tweets, removeHTTP))
+clean.tweets <- as.vector(sapply(clean.tweets, removeEnglishWords))
+clean.tweets <- as.vector(sapply(clean.tweets, removePunctuation))
+clean.tweets <- as.vector(sapply(clean.tweets, removeArabicNumbers))
+clean.tweets <- as.vector(sapply(clean.tweets, removeDiacritics))
+clean.tweets <- as.vector(sapply(clean.tweets, removeNumbers))
+clean.tweets <- as.vector(sapply(clean.tweets, removeElongation))
+clean.tweets <- as.vector(sapply(clean.tweets, fixAlifs))
+clean.tweets <- as.vector(sapply(clean.tweets, removePrefixes))
+clean.tweets <- as.vector(sapply(clean.tweets, removeSuffixes))
+clean.tweets <- as.vector(sapply(clean.tweets, replaceNegWords))
+clean.tweets <- as.vector(sapply(clean.tweets, replacePosWords))
+#clean.tweets <- as.vector(sapply(clean.tweets, arabicStemming))
+clean.tweets <- as.vector(sapply(clean.tweets, reomveSingleLetters))
+clean.tweets <- as.vector(sapply(clean.tweets, stripWhitespace))
+#clean.tweets[1:10]
+write.table(clean.tweets, file="clean.tweets.txt", fileEncoding = "UTF-8", row.names = F, col.names = F)
+```
